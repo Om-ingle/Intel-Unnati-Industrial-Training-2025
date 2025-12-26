@@ -1,0 +1,157 @@
+name: "Smart Q&A Agent with Multi-Step Reasoning"
+description: "An intelligent agent that answers questions by researching, reasoning, and providing detailed explanations"
+
+nodes:
+  # Step 1: Parse and understand the question
+  - id: "parse_question"
+    type: "transform"
+    config:
+      operation: "passthrough"
+      input_key: "question"
+      output_key: "parsed_question"
+  
+  # Step 2: Determine if research is needed
+  - id: "check_research_needed"
+    type: "llm_call"
+    config:
+      prompt: |
+        Analyze this question and determine if it requires current information or research:
+        Question: {question}
+        
+        Respond with:
+        - "research" if it needs current data, facts, or recent information
+        - "knowledge" if it can be answered from general knowledge
+        
+        Only respond with one word: either "research" or "knowledge"
+      model: "gpt-4"
+      temperature: 0.3
+      output_key: "research_decision"
+  
+  # Step 3: Conditional - Research path
+  - id: "web_research"
+    type: "web_search"
+    config:
+      query: "{question}"
+      max_results: 3
+      output_key: "research_data"
+  
+  # Step 4: Generate answer with research
+  - id: "answer_with_research"
+    type: "llm_call"
+    config:
+      prompt: |
+        Answer this question using the provided research:
+        
+        Question: {question}
+        
+        Research Data:
+        {research_data}
+        
+        Provide a comprehensive, accurate answer with citations from the research.
+      model: "gpt-4"
+      temperature: 0.7
+      output_key: "answer"
+  
+  # Step 5: Generate answer from knowledge (alternative path)
+  - id: "answer_from_knowledge"
+    type: "llm_call"
+    config:
+      prompt: |
+        Answer this question using your knowledge:
+        
+        Question: {question}
+        
+        Provide a clear, detailed, and accurate answer. Include examples if relevant.
+      model: "gpt-4"
+      temperature: 0.7
+      output_key: "answer"
+  
+  # Step 6: Enhance answer with explanation
+  - id: "enhance_explanation"
+    type: "llm_call"
+    config:
+      prompt: |
+        Enhance this answer with additional context and explanation:
+        
+        Original Answer:
+        {answer}
+        
+        Question: {question}
+        
+        Add:
+        - Related concepts
+        - Why this answer is important
+        - Additional context that might be helpful
+      model: "gpt-4"
+      temperature: 0.8
+      output_key: "enhanced_answer"
+  
+  # Step 7: Generate follow-up questions
+  - id: "generate_followups"
+    type: "llm_call"
+    config:
+      prompt: |
+        Based on this question and answer, suggest 2-3 relevant follow-up questions:
+        
+        Question: {question}
+        Answer: {enhanced_answer}
+        
+        Provide follow-up questions that would help deepen understanding.
+      model: "gpt-4"
+      temperature: 0.9
+      output_key: "followup_questions"
+  
+  # Step 8: Format final response
+  - id: "format_response"
+    type: "data_aggregator"
+    config:
+      inputs:
+        - key: "question"
+          label: "Question"
+        - key: "enhanced_answer"
+          label: "Answer"
+        - key: "followup_questions"
+          label: "Follow-up Questions"
+      output_key: "final_response"
+      format: "structured"
+  
+  # Step 9: Output
+  - id: "output"
+    type: "output"
+    config:
+      input_key: "final_response"
+      format: "json"
+
+edges:
+  # Main flow
+  - from: "parse_question"
+    to: "check_research_needed"
+  
+  # Research path (conditional - would need conditional node for real branching)
+  - from: "check_research_needed"
+    to: "web_research"
+  - from: "web_research"
+    to: "answer_with_research"
+  
+  # Knowledge path (simplified - both paths lead to enhancement)
+  - from: "check_research_needed"
+    to: "answer_from_knowledge"
+  
+  # Both paths converge
+  - from: "answer_with_research"
+    to: "enhance_explanation"
+  - from: "answer_from_knowledge"
+    to: "enhance_explanation"
+  
+  - from: "enhance_explanation"
+    to: "generate_followups"
+  
+  - from: "generate_followups"
+    to: "format_response"
+  
+  - from: "format_response"
+    to: "output"
+
+input:
+  question: "string"
+

@@ -1,0 +1,8 @@
+sentencepiece
+presidio-analyzer[transformers]
+presidio-analyzer[stanza]
+presidio-anonymizer
+pandas
+torch
+flair
+--extra-index-url https://download.pytorch.org/whl/cpu

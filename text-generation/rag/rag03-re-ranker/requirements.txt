@@ -1,0 +1,5 @@
+torch
+transformers
+typing
+pydantic==2.6.3
+qdrant_client==1.7.3

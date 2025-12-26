@@ -1,0 +1,87 @@
+name: "Research Assistant Workflow"
+description: "Multi-step research with parallel data gathering"
+
+nodes:
+  # Step 1: Process input topic
+  - id: "process_topic"
+    type: "transform"
+    config:
+      operation: "uppercase"
+      input_key: "topic"
+      output_key: "processed_topic"
+  
+  # Step 2: Parallel research branches
+  - id: "web_research"
+    type: "web_search"
+    config:
+      query: "{processed_topic} research papers"
+      max_results: 5
+      output_key: "web_results"
+  
+  - id: "database_lookup"
+    type: "database_query"
+    config:
+      query: "SELECT * FROM research WHERE topic LIKE '%{processed_topic}%'"
+      output_key: "db_results"
+  
+  - id: "api_fetch"
+    type: "http_request"
+    config:
+      url: "https://api.example.com/research?q={processed_topic}"
+      method: "GET"
+      output_key: "api_results"
+  
+  # Step 3: Aggregate all research
+  - id: "aggregate_research"
+    type: "data_aggregator"
+    config:
+      sources: ["web_results", "db_results", "api_results"]
+      operation: "merge"
+      output_key: "all_research"
+  
+  # Step 4: Summarize with LLM
+  - id: "summarize"
+    type: "llm_call"
+    config:
+      prompt: "Summarize these research findings: {all_research}"
+      model: "gpt-4"
+      output_key: "summary"
+  
+  # Step 5: Quality check
+  - id: "quality_check"
+    type: "conditional"
+    config:
+      condition: "len(str({summary})) > 100"
+      true_value: "high_quality"
+      false_value: "needs_improvement"
+      output_key: "quality"
+  
+  # Step 6: Output
+  - id: "output"
+    type: "output"
+    config:
+      input_key: "summary"
+      format: "json"
+
+edges:
+  - from: "process_topic"
+    to: "web_research"
+  - from: "process_topic"
+    to: "database_lookup"
+  - from: "process_topic"
+    to: "api_fetch"
+  - from: "web_research"
+    to: "aggregate_research"
+  - from: "database_lookup"
+    to: "aggregate_research"
+  - from: "api_fetch"
+    to: "aggregate_research"
+  - from: "aggregate_research"
+    to: "summarize"
+  - from: "summarize"
+    to: "quality_check"
+  - from: "quality_check"
+    to: "output"
+
+input:
+  topic: "string"

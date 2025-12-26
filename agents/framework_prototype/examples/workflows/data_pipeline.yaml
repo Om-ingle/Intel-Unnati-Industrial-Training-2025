@@ -1,0 +1,75 @@
+name: "Data Processing Pipeline"
+description: "ETL workflow with validation and transformation"
+
+nodes:
+  # Extract
+  - id: "extract_data"
+    type: "http_request"
+    config:
+      url: "https://api.example.com/data/{data_id}"
+      method: "GET"
+      output_key: "raw_data"
+  
+  # Transform - parallel processing
+  - id: "transform_format"
+    type: "transform"
+    config:
+      operation: "uppercase"
+      input_key: "raw_data"
+      output_key: "formatted_data"
+  
+  - id: "enrich_data"
+    type: "database_query"
+    config:
+      query: "SELECT * FROM enrichment WHERE id = {data_id}"
+      output_key: "enrichment"
+  
+  # Validate
+  - id: "validate"
+    type: "conditional"
+    config:
+      condition: "{formatted_data} is not None and {enrichment} is not None"
+      true_value: "valid"
+      false_value: "invalid"
+      output_key: "validation_status"
+  
+  # Merge
+  - id: "merge"
+    type: "data_aggregator"
+    config:
+      sources: ["formatted_data", "enrichment"]
+      operation: "merge"
+      output_key: "merged_data"
+  
+  # Load
+  - id: "load_data"
+    type: "database_query"
+    config:
+      query: "INSERT INTO processed_data VALUES ({merged_data})"
+      output_key: "load_result"
+  
+  # Output
+  - id: "output"
+    type: "output"
+    config:
+      input_key: "load_result"
+      format: "json"
+
+edges:
+  - from: "extract_data"
+    to: "transform_format"
+  - from: "extract_data"
+    to: "enrich_data"
+  - from: "transform_format"
+    to: "validate"
+  - from: "enrich_data"
+    to: "validate"
+  - from: "validate"
+    to: "merge"
+  - from: "merge"
+    to: "load_data"
+  - from: "load_data"
+    to: "output"
+
+input:
+  data_id: "string"

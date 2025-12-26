@@ -1,0 +1,7 @@
+torch==2.6.0
+torchaudio
+transformers==4.50
+datasets
+librosa 
+soundfile
+--extra-index-url https://download.pytorch.org/whl/cpu

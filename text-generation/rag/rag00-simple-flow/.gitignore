@@ -1,0 +1,13 @@
+__pycache__
+./venv
+venv
+.env
+../venv
+data
+lang-free-rag
+qdrant_database
+rag-simple-flow
+vector_database/data
+feedback.txt
+
+**/**/__pycache__

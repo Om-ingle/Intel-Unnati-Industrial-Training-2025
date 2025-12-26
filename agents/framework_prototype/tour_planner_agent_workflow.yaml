@@ -1,0 +1,179 @@
+name: "Tour Planner Agent"
+description: "An intelligent agent that plans tours, creates itineraries, and can book events to Google Calendar"
+
+nodes:
+  # Step 1: Parse input
+  - id: "parse_input"
+    type: "transform"
+    config:
+      operation: "passthrough"
+      input_key: "destination"
+      output_key: "tour_destination"
+  
+  - id: "parse_date"
+    type: "transform"
+    config:
+      operation: "passthrough"
+      input_key: "date"
+      output_key: "tour_date"
+  
+  # Step 2: Research destination
+  - id: "research_destination"
+    type: "web_search"
+    config:
+      query: "Best places to visit in {tour_destination} and things to do"
+      max_results: 5
+      output_key: "destination_info"
+  
+  # Step 3: Generate tour plan
+  - id: "create_itinerary"
+    type: "llm_call"
+    config:
+      prompt: |
+        Create a detailed day tour itinerary for {tour_destination} on {tour_date}.
+        
+        Destination Information:
+        {destination_info}
+        
+        Create a comprehensive plan with:
+        1. Morning activities (9 AM - 12 PM)
+        2. Afternoon activities (12 PM - 5 PM)
+        3. Evening activities (5 PM - 9 PM)
+        4. Recommended restaurants
+        5. Travel tips
+        
+        Format it as a structured itinerary with times and locations.
+      model: "llama-3.3-70b-versatile"
+      temperature: 0.8
+      output_key: "itinerary"
+  
+  # Step 4: Generate summary
+  - id: "create_summary"
+    type: "llm_call"
+    config:
+      prompt: |
+        Create a brief summary of the tour plan for {tour_destination}:
+        
+        Itinerary:
+        {itinerary}
+        
+        Provide a 2-3 sentence summary highlighting the key activities.
+      model: "llama-3.3-70b-versatile"
+      temperature: 0.7
+      output_key: "tour_summary"
+  
+  # Step 5: Create calendar event for morning
+  - id: "calendar_morning"
+    type: "google_calendar"
+    config:
+      event_title: "Tour: {tour_destination} - Morning Activities"
+      event_description: |
+        Morning Tour Activities
+        
+        {itinerary}
+      start_date: "{tour_date} 09:00"
+      end_date: "{tour_date} 12:00"
+      location: "{tour_destination}"
+      require_confirmation: true
+      output_key: "morning_event"
+  
+  # Step 6: Create calendar event for afternoon
+  - id: "calendar_afternoon"
+    type: "google_calendar"
+    config:
+      event_title: "Tour: {tour_destination} - Afternoon Activities"
+      event_description: |
+        Afternoon Tour Activities
+        
+        {itinerary}
+      start_date: "{tour_date} 12:00"
+      end_date: "{tour_date} 17:00"
+      location: "{tour_destination}"
+      require_confirmation: true
+      output_key: "afternoon_event"
+  
+  # Step 7: Create calendar event for evening
+  - id: "calendar_evening"
+    type: "google_calendar"
+    config:
+      event_title: "Tour: {tour_destination} - Evening Activities"
+      event_description: |
+        Evening Tour Activities
+        
+        {itinerary}
+      start_date: "{tour_date} 17:00"
+      end_date: "{tour_date} 21:00"
+      location: "{tour_destination}"
+      require_confirmation: true
+      output_key: "evening_event"
+  
+  # Step 8: Aggregate final plan
+  - id: "aggregate_plan"
+    type: "data_aggregator"
+    config:
+      inputs:
+        - key: "tour_destination"
+          label: "Destination"
+        - key: "tour_date"
+          label: "Date"
+        - key: "itinerary"
+          label: "Full Itinerary"
+        - key: "tour_summary"
+          label: "Summary"
+        - key: "morning_event"
+          label: "Morning Event"
+        - key: "afternoon_event"
+          label: "Afternoon Event"
+        - key: "evening_event"
+          label: "Evening Event"
+      output_key: "final_plan"
+      format: "structured"
+  
+  # Step 9: Output
+  - id: "output"
+    type: "output"
+    config:
+      input_key: "final_plan"
+      format: "json"
+
+edges:
+  - from: "parse_input"
+    to: "research_destination"
+  
+  - from: "parse_date"
+    to: "research_destination"
+  
+  - from: "research_destination"
+    to: "create_itinerary"
+  
+  - from: "create_itinerary"
+    to: "create_summary"
+  
+  - from: "create_itinerary"
+    to: "calendar_morning"
+  
+  - from: "create_itinerary"
+    to: "calendar_afternoon"
+  
+  - from: "create_itinerary"
+    to: "calendar_evening"
+  
+  - from: "create_summary"
+    to: "aggregate_plan"
+  
+  - from: "calendar_morning"
+    to: "aggregate_plan"
+  
+  - from: "calendar_afternoon"
+    to: "aggregate_plan"
+  
+  - from: "calendar_evening"
+    to: "aggregate_plan"
+  
+  - from: "aggregate_plan"
+    to: "output"
+
+input:
+  destination: "string"
+  date: "string"
+

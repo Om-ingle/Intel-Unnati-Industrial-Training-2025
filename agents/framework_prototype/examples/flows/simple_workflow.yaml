@@ -1,0 +1,31 @@
+name: "Simple Workflow"
+description: "A basic example workflow"
+
+nodes:
+  - id: "greet"
+    type: "llm_call"
+    config:
+      prompt: "Generate a friendly greeting for {name}"
+      output_key: "greeting"
+  
+  - id: "transform"
+    type: "transform"
+    config:
+      operation: "uppercase"
+      input_key: "greeting"
+      output_key: "final_greeting"
+  
+  - id: "output"
+    type: "output"
+    config:
+      input_key: "final_greeting"
+      format: "text"
+
+edges:
+  - from: "greet"
+    to: "transform"
+  - from: "transform"
+    to: "output"
+
+input:
+  name: "string"

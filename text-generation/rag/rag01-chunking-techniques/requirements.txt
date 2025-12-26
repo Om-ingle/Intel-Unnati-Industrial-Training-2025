@@ -1,0 +1,12 @@
+torch 
+transformers 
+PyMuPDF 
+tabula-py 
+qdrant-client 
+pyPDF2
+uvicorn
+fastapi
+pymongo
+python-multipart
+jpype1
+nltk
