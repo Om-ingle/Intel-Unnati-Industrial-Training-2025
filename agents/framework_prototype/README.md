@@ -24,8 +24,8 @@ This repository contains a **custom-built AI Agent Framework** developed as part
 ┌─────────────────────────────────────────────────────────────────┐
 │                    USER INTERFACE LAYER                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
-│  │   Web UI     │  │  REST API    │  │   Streamlit App      │ │
-│  │              │  │  (FastAPI)   │  │ (Local/Distributed)  │ │
+│  │   Web UI     │  │  REST API    │  │   Streamlit Apps     │ │
+│  │              │  │  (FastAPI)   │  │ (Main UI & Cortex)   │ │
 │  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘ │
 └─────────┼──────────────────┼─────────────────────┼─────────────┘
           │                  │                     │
@@ -97,7 +97,7 @@ The heart of this repository is the **AI Agent Framework** located in `agents/fr
 - Interactive **workflow designer** (web-based)
 - Real-time **execution monitoring**
 - State inspection and debugging
-- **Streamlit dashboards** for analytics & distributed control
+- **Streamlit dashboards** (Main & Cortex) for analytics & distributed control
 
 #### 🌐 **Enterprise Integration (New!)**
 - **Distributed Execution**: Scale execution across multiple workers via Kafka
@@ -284,6 +284,9 @@ run_dashboard.bat
 
 # Or directly with Python
 streamlit run dashboard.py
+
+# For Real-time Distributed Monitoring
+streamlit run cortex_dashboard.py
 ```
 
 The dashboard provides:
@@ -314,6 +317,13 @@ python worker.py
 streamlit run dashboard.py
 ```
 *Select "Distributed (Kafka)" mode in the sidebar and click "Run".*
+
+**Step 4: Monitor with Cortex**
+```bash
+# Open another terminal
+streamlit run cortex_dashboard.py
+```
+*View real-time event logs from Kafka.*
 
 ### 5. Start the REST API
 
@@ -794,6 +804,7 @@ python view_results.py                               # View execution results
 docker compose up -d                                 # Start Kafka & Airflow
 python worker.py                                     # Start Agent Worker
 streamlit run dashboard.py                           # Run Dashboard (Select "Distributed" mode)
+streamlit run cortex_dashboard.py                    # Real-time Execution Monitoring (Cortex)
 ```
 
 ---
