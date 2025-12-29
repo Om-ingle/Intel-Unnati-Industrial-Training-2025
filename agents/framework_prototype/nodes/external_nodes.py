@@ -12,9 +12,11 @@ from datetime import datetime, timedelta
 # Handle imports
 try:
     from ..core import Node, State, NodeResult, NodeStatus
+    import requests
 except ImportError:
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from core import Node, State, NodeResult, NodeStatus
+    import requests
 
 
 class GoogleCalendarNode(Node):
@@ -197,9 +199,83 @@ class ExternalActionNode(Node):
         return re.sub(r'\{(\w+)\}', replace_var, template)
 
 
+
+class CamelNode(Node):
+    """
+    Node to invoke Apache Camel routes via HTTP REST.
+    
+    Config:
+        - camel_url: Base URL of the Camel instance (default: http://localhost:8080)
+        - route_id: specific route path to trigger (e.g., "api/sap/customer")
+        - payload: Data to send (supports {variables})
+        - method: HTTP method (POST, GET, etc.)
+        - output_key: Where to store the response
+    """
+    
+    def execute(self, state: State) -> NodeResult:
+        config = self.config
+        
+        camel_url = config.get("camel_url", "http://localhost:8080").rstrip('/')
+        route_id = config.get("route_id", "camel/route")
+        payload_template = config.get("payload", {})
+        method = config.get("method", "POST").upper()
+        output_key = config.get("output_key", "camel_response")
+        
+        # Prepare payload
+        payload = self._replace_variables(payload_template, state)
+        
+        # Construct URL
+        # Camel routes often exposed like http://host:port/api/myroute
+        full_url = f"{camel_url}/{route_id}"
+        
+        print(f"🐫 connecting to Camel Route: {full_url}")
+        
+        try:
+            # Try to connect
+            # timeout small for prototype responsiveness
+            if method == 'POST':
+                response = requests.post(full_url, json=payload, timeout=2)
+            else:
+                response = requests.get(full_url, params=payload, timeout=2)
+                
+            response.raise_for_status()
+            result_data = response.json()
+            
+        except requests.exceptions.ConnectionError:
+            print(f"⚠️ Camel instance not found at {full_url}. (This is expected if Camel is not running).")
+            print("   Using Mock Response for demonstration.")
+            result_data = {
+                "status": "mock_success", 
+                "source": "CamelNode (Mock)", 
+                "original_payload": payload,
+                "note": "Real connection failed, returned mock data."
+            }
+        except Exception as e:
+             return NodeResult.failed(f"Camel integration failed: {str(e)}")
+
+        state.set(output_key, result_data)
+        
+        return NodeResult.success(output=result_data)
+    
+    def _replace_variables(self, template: Any, state: State) -> Any:
+        """Helper to replace vars in dict or string"""
+        if isinstance(template, str):
+            import re
+            def replace_var(match):
+                var_name = match.group(1)
+                val = state.get(var_name)
+                return str(val) if val is not None else f"{{{var_name}}}"
+            return re.sub(r'\{(\w+)\}', replace_var, template)
+        elif isinstance(template, dict):
+            return {k: self._replace_variables(v, state) for k, v in template.items()}
+        elif isinstance(template, list):
+            return [self._replace_variables(i, state) for i in template]
+        return template
+
 # Registry
 EXTERNAL_NODE_TYPES = {
     "google_calendar": GoogleCalendarNode,
     "external_action": ExternalActionNode,
+    "camel_integration": CamelNode,
 }
 

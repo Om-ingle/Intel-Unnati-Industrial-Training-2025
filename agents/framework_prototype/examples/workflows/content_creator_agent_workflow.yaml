@@ -1,0 +1,156 @@
+name: "Content Creator Agent"
+description: "An agent that creates professional content by researching, structuring, and generating complete articles"
+
+nodes:
+  # Step 1: Prepare topic
+  - id: "prepare_topic"
+    type: "transform"
+    config:
+      operation: "passthrough"
+      input_key: "topic"
+      output_key: "content_topic"
+  
+  # Step 2: Research the topic
+  - id: "research"
+    type: "web_search"
+    config:
+      query: "Comprehensive information about {content_topic}"
+      max_results: 5
+      output_key: "research_findings"
+  
+  # Step 3: Generate content outline
+  - id: "create_outline"
+    type: "llm_call"
+    config:
+      prompt: |
+        Create a detailed content outline for an article about: {content_topic}
+        
+        Research findings:
+        {research_findings}
+        
+        Generate a structured outline with:
+        - Title
+        - Introduction
+        - 3-5 main sections with sub-points
+        - Conclusion
+        
+        Format as a clear, hierarchical outline.
+      provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      temperature: 0.7
+      max_tokens: 2000
+      output_key: "outline"
+  
+  # Step 4: Generate introduction
+  - id: "write_intro"
+    type: "llm_call"
+    config:
+      prompt: |
+        Write an engaging introduction for an article about: {content_topic}
+        
+        Outline:
+        {outline}
+        
+        Research:
+        {research_findings}
+        
+        Make it compelling and informative (2-3 paragraphs).
+      provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      temperature: 0.8
+      max_tokens: 2000
+      output_key: "introduction"
+  
+  # Step 5: Generate main content
+  - id: "write_content"
+    type: "llm_call"
+    config:
+      prompt: |
+        Write the main body content for an article about: {content_topic}
+        
+        Outline:
+        {outline}
+        
+        Research:
+        {research_findings}
+        
+        Write comprehensive, well-structured content covering all main points from the outline (4-6 paragraphs).
+      provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      temperature: 0.8
+      max_tokens: 3000
+      output_key: "main_content"
+  
+  # Step 6: Generate conclusion
+  - id: "write_conclusion"
+    type: "llm_call"
+    config:
+      prompt: |
+        Write a strong conclusion for an article about: {content_topic}
+        
+        Introduction:
+        {introduction}
+        
+        Main Content:
+        {main_content}
+        
+        Write a conclusion that summarizes key points and provides a memorable closing (1-2 paragraphs).
+      provider: "groq"
+      model: "llama-3.3-70b-versatile"
+      temperature: 0.8
+      max_tokens: 1500
+      output_key: "conclusion"
+  
+  # Step 7: Compile final article
+  - id: "compile_article"
+    type: "data_aggregator"
+    config:
+      inputs:
+        - key: "content_topic"
+          label: "Topic"
+        - key: "outline"
+          label: "Outline"
+        - key: "introduction"
+          label: "Introduction"
+        - key: "main_content"
+          label: "Main Content"
+        - key: "conclusion"
+          label: "Conclusion"
+      output_key: "final_article"
+      format: "structured"
+  
+  # Step 8: Format and output
+  - id: "output"
+    type: "output"
+    config:
+      input_key: "final_article"
+      format: "json"
+
+edges:
+  - from: "prepare_topic"
+    to: "research"
+  
+  - from: "research"
+    to: "create_outline"
+  
+  - from: "create_outline"
+    to: "write_intro"
+  
+  - from: "create_outline"
+    to: "write_content"
+  
+  - from: "write_intro"
+    to: "write_conclusion"
+  
+  - from: "write_content"
+    to: "write_conclusion"
+  
+  - from: "write_conclusion"
+    to: "compile_article"
+  
+  - from: "compile_article"
+    to: "output"
+
+input:
+  topic: "string"
+

@@ -1,7 +1,0 @@
-# Phase 1: Core Foundation
-pyyaml==6.0.1
-pydantic==2.5.0
-python-dotenv==1.0.0
-groq==0.4.1
-tenacity==8.2.3
-requests==2.31.0

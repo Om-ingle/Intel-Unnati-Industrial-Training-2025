@@ -11,6 +11,22 @@ from datetime import datetime
 from orchestrator.executor import WorkflowExecutor
 import sys
 import os
+import uuid
+import json
+import time
+
+try:
+    from kafka import KafkaConsumer
+except ImportError:
+    pass # Handled later via flag or try/except blocks
+
+# Add infrastructure imports
+try:
+    from infrastructure.messaging.kafka_service import KafkaService
+except ImportError:
+    # If custom pathing needed
+    sys.path.insert(0, str(Path(__file__).parent))
+    from infrastructure.messaging.kafka_service import KafkaService
 
 # Page config
 st.set_page_config(
@@ -146,6 +162,17 @@ def main():
         
         st.markdown("---")
         st.header("⚙️ Settings")
+        
+        # Execution Mode
+        st.subheader("🚀 Execution Mode")
+        execution_mode = st.radio(
+            "Mode:",
+            ["Local (In-Process)", "Distributed (Kafka)"],
+            index=0,
+            help="Local runs in this dashboard. Distributed sends to Worker nodes via Kafka."
+        )
+        st.session_state.execution_mode = "distributed" if "Distributed" in execution_mode else "local"
+        
         show_debug = st.checkbox("Show Debug Info", value=False)
         
         # API Keys Management
@@ -396,20 +423,120 @@ def run_agent_page(show_debug):
             # Execute workflow
             with st.spinner(f"🔄 Executing {selected_workflow['name']}..."):
                 try:
-                    executor = WorkflowExecutor()
-                    execution = executor.execute_flow_file(
-                        selected_workflow['path'],
-                        input_data
-                    )
-                    
-                    # Store in session state
-                    st.session_state.current_execution = {
-                        'workflow': selected_workflow['name'],
-                        'execution': execution,
-                        'timestamp': datetime.now(),
-                        'inputs': input_data
-                    }
-                    
+                    if st.session_state.execution_mode == "local":
+                        executor = WorkflowExecutor()
+                        execution = executor.execute_flow_file(
+                            selected_workflow['path'],
+                            input_data
+                        )
+                        
+                        # Store in session state
+                        st.session_state.current_execution = {
+                            'workflow': selected_workflow['name'],
+                            'execution': execution,
+                            'timestamp': datetime.now(),
+                            'inputs': input_data,
+                            'mode': 'local'
+                        }
+                    else:
+                        # Distributed Mode
+                        job_id = str(uuid.uuid4())
+                        kafka = KafkaService()
+                        
+                        if not kafka.enabled:
+                            st.error("❌ Kafka not available. Is Docker running?")
+                            return
+
+                        payload = {
+                            "job_id": job_id,
+                            "flow_file": str(Path(selected_workflow['path']).name), # Worker expects filename in examples/workflows
+                            "input": input_data
+                        }
+                        
+                        kafka.send_event('agent_jobs', 'JOB_REQUEST', payload)
+                        kafka.close()
+                        
+                        st.success(f"✅ Job {job_id} sent to Distributed Worker!")
+                        
+                        # Polling for result
+                        with st.spinner("⏳ Waiting for remote worker to finish... (This may take a few seconds)"):
+                            # Create consumer
+                            consumer = KafkaConsumer(
+                                'agent_job_results',
+                                bootstrap_servers=['localhost:29092'],
+                                auto_offset_reset='earliest', # Changed from latest to catch fast responses
+                                group_id=f'dashboard_poller_{job_id}',
+                                value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+                                consumer_timeout_ms=30000  # Wait up to 30s
+                            )
+                            
+                            start_time = time.time()
+                            job_result = None
+                            
+                            # Simple polling loop
+                            # We poll until we find OUR job_id or timeout
+                            while (time.time() - start_time) < 60:
+                                msg_batch = consumer.poll(timeout_ms=1000)
+                                for tp, messages in msg_batch.items():
+                                    for msg in messages:
+                                        data = msg.value
+                                        # checkpoint: is this our job?
+                                        if data.get('payload', {}).get('job_id') == job_id:
+                                            job_result = data
+                                            break
+                                    if job_result: break
+                                if job_result: break
+                                
+                            consumer.close()
+                        
+                        if job_result:
+                            payload = job_result.get('payload', {})
+                            status = payload.get('status')
+                            output_state = payload.get('output', {})
+                            error_msg = payload.get('error')
+                            
+                            # Construct a mock execution object for display_results
+                            class MockExecution:
+                                def __init__(self, s, state_dict, err):
+                                    self.status = s
+                                    self.error = err
+                                    self.execution_id = job_id
+                                    self.node_results = {} # Detailed node results might be missing in simple payload
+                                    
+                                    # Create a mock State object
+                                    class MockState:
+                                        def __init__(self, d): self._d = d
+                                        def get_all(self): return self._d
+                                        def set(self, k, v): self._d[k] = v
+                                    self.state = MockState(state_dict)
+                                
+                                def get_duration(self): return 0.0 # Unknown duration
+                                
+                            mock_exec = MockExecution(status, output_state, error_msg)
+
+                            st.session_state.current_execution = {
+                                'workflow': selected_workflow['name'],
+                                'execution': mock_exec,
+                                'status': status,
+                                'job_id': job_id,
+                                'timestamp': datetime.now(),
+                                'inputs': input_data,
+                                'mode': 'distributed_completed' # Mark as completed distributed
+                            }
+                            st.success("✅ Remote execution completed!")
+                            
+                        else:
+                            st.warning("⏳ Timeout waiting for result. The worker is still running.")
+                            st.info(f"Job ID: {job_id}")
+                            st.session_state.current_execution = {
+                                'workflow': selected_workflow['name'],
+                                'status': 'queued',
+                                'job_id': job_id,
+                                'timestamp': datetime.now(),
+                                'inputs': input_data,
+                                'mode': 'distributed'
+                            }
+
                     # Add to history
                     st.session_state.execution_history.insert(0, st.session_state.current_execution.copy())
                     
@@ -428,6 +555,15 @@ def run_agent_page(show_debug):
 
 def display_results(execution_data, show_debug):
     """Display execution results"""
+    # Handle Distributed Mode
+    if execution_data.get('mode') == 'distributed':
+        st.markdown("---")
+        st.header("📊 Distributed Execution Queued")
+        st.success(f"✅ Job sent to worker queue")
+        st.markdown(f"**Job ID:** `{execution_data.get('job_id')}`")
+        st.info("ℹ️ Switch to the 'Cortex Live Dashboard' to monitor the execution status in real-time.")
+        return
+
     execution = execution_data['execution']
     workflow_name = execution_data['workflow']
     

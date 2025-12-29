@@ -1,0 +1,30 @@
+name: "Hello World Workflow"
+description: "A simple workflow"
+
+nodes:
+  - id: "greet"
+    type: "transform"
+    config:
+      operation: "uppercase"
+      input_key: "name"
+      output_key: "greeting"
+  
+  - id: "output"
+    type: "output"
+    config:
+      input_key: "greeting"
+      format: "text"
+
+  - id: "summarize"
+    type: "llm_call"
+    config:
+      prompt: "Summarize: {name}"
+      model: "gpt-4"
+      output_key: "summary"
+
+edges:
+  - from: "greet"
+    to: "output"
+
+input:
+  name: "string"

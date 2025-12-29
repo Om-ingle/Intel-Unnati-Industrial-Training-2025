@@ -1,0 +1,23 @@
+name: "Simple Kafka Test Flow"
+description: "A pass-through workflow to verify Kafka execution"
+
+nodes:
+  - id: "start_node"
+    type: "transform"
+    config:
+      operation: "passthrough"
+      input_key: "msg"
+      output_key: "result"
+
+  - id: "output_node"
+    type: "output"
+    config:
+      input_key: "result"
+      format: "text"
+
+edges:
+  - from: "start_node"
+    to: "output_node"
+
+input:
+  msg: "string"
