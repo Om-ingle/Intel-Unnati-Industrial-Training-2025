@@ -1,4 +1,4 @@
-# Intel Training - AI Agent Framework Curriculum
+# Intel Training - AI Agent Framework
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -812,3 +812,4 @@ streamlit run cortex_dashboard.py                    # Real-time Execution Monit
 **Built with ❤️ for Intel's AI Training Program**
 
 *Empowering developers to build production-ready AI agent systems from the ground up.*
+
